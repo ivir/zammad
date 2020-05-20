@@ -81,7 +81,7 @@ class App.TicketZoomArticleNew extends App.Controller
 
     # add article attachment
     @bind('ui::ticket::addArticleAttachent', (data) =>
-      return if data.ticket.id.toString() isnt @ticket_id.toString()
+      return if data.ticket?.id?.toString() isnt @ticket_id.toString() && data.form_id isnt @form_id
       return if _.isEmpty(data.attachments)
       for file in data.attachments
         @renderAttachment(file)
@@ -141,11 +141,14 @@ class App.TicketZoomArticleNew extends App.Controller
     if @subscribeIdTextModule
       App.Ticket.unsubscribe(@subscribeIdTextModule)
 
+    @releaseGlobalClickEvents()
+
+  releaseGlobalClickEvents: ->
     $(window).off 'click.ticket-zoom-select-type'
-    $(window).on 'click.ticket-zoom-textarea'
+    $(window).off 'click.ticket-zoom-textarea'
 
   render: ->
-
+    @releaseGlobalClickEvents()
     ticket = App.Ticket.fullLocal(@ticket_id)
 
     @html App.view('ticket_zoom/article_new')(
