@@ -80,6 +80,11 @@ class Ldap
       filter ||= filter()
 
       result = {}
+
+      # we try nested group, if fail then we use standard way
+      nested = user_roles_nested(mapping,filter)
+      return nested if !(nested.nil?)
+
       @ldap.search(filter, attributes: %w[dn member memberuid uniquemember]) do |entry|
 
         roles = mapping[entry.dn.downcase]
@@ -151,5 +156,41 @@ class Ldap
         dn
       end.compact
     end
+
+    # Creates a mapping for user DN and local role IDs based on a given group DN to local role ID mapping. For searching use query to nested groups
+    #
+    # @param mapping [Hash{String=>String}] The group DN to local role mapping.
+    # @param filter [String] The filter for finding groups. Default is initialization parameter.
+    #
+    # @example
+    #  mapping = {"cn=access control assistance operators,cn=builtin,dc=domain,dc=tld"=>"1", ...}
+    #  ldap_group.user_roles(mapping)
+    #  #=> {"cn=s-1-5-11,cn=foreignsecurityprincipals,dc=domain,dc=tld"=>[1, 2], ...}
+    #
+    # @return [Hash{String=>Array<Number>},nil] The user DN to local role IDs mapping of if query fail then return nil
+    def user_roles_nested(mapping, filter: nil)
+      filter ||= filter()
+      result = {}
+      mapping.each do |group,roles|
+        nested_group_query = "(&#{filter}(memberOf:1.2.840.113556.1.4.1941:=#{group}))"
+
+        return_code = @ldap.search(nested_group_query, attributes: %w[dn]) do |entry|
+          user_dn_key = entry.dn.downcase
+
+          roles.each do |role|
+            role = role.to_i
+
+            result[user_dn_key] ||= []
+            next if result[user_dn_key].include?(role)
+
+            result[user_dn_key].push(role)
+          end
+        end
+        return nil if !(return_code)
+      end
+
+      result
+    end
+
   end
 end
